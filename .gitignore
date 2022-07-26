@@ -163,3 +163,4 @@ cython_debug/
 cert/prestowixlocaldev.crt
 cert/prestowixlocaldev.key
 test_main.http
+/hook.json
