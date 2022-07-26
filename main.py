@@ -73,7 +73,7 @@ def hook(data: WebhookData):
     This is endpoint for receiving webhook requests from the Wix API.
     """
     with open("hook.json", "w") as f:
-        f.write(data)
+        f.write(data.data.data)
     pprint(data.data.data)
     return {"status": "ok!"}
 
