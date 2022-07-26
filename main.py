@@ -74,7 +74,7 @@ def hook(data: WebhookData):
     """
     with open("hook.json", "w") as f:
         f.write(str(data))
-    return {"status": "ok!"}
+    return {"status": "ok"}
 
 
 # if __name__ == "__main__":
