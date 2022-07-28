@@ -1,8 +1,10 @@
+from typing import Type
+
 from jose import jwt
 from cryptography.hazmat.primitives import serialization
 from pydantic import ValidationError
 
-from schemas.presto_output import OrderPrestoModel
+from schemas.presto_output import OrderPrestoModel, OrderItem, OrderItemOption, Payment
 from schemas.wix_input import OrderWixModel
 
 
@@ -26,8 +28,252 @@ def print_data_from_wix_order(data):
         print(order.json(by_alias=True))
 
 
-if __name__ == '__main__':
-    OUTPUT_JSON = """{"id":459840,"contact":{"firstName":"test","lastName":"test","phone":"0544520187"},"delivery":{"type":"delivery","address":{"formatted":"��� ����, test 1 \/ 1","city":"��� ����","street":"test","number":"1","entrance":"","floor":"","apt":"1","comment":""},"charge":"8","numppl":"1","workercode":1},"orderItems":[{"type":"item","id":762,"price":0,"comment":"0","children":[],"itemcount":1,"childrencount":0},{"type":"item","id":101,"price":0,"comment":"0","children":[],"itemcount":1,"childrencount":0},{"type":"item","id":761,"price":0,"comment":"","children":[],"itemcount":2,"childrencount":0},{"type":"item","id":765,"price":0,"comment":"","children":[],"itemcount":2,"childrencount":0},{"type":"item","id":74,"price":42,"comment":" \/\/ ��� ������","children":[{"type":"option","id":290,"price":0,"comment":""}],"itemcount":1,"childrencount":1},{"type":"item","id":74,"price":42,"comment":" \/\/ ��� ������","children":[{"type":"option","id":290,"price":0,"comment":""}],"itemcount":1,"childrencount":1}],"comment":"","takeoutPacks":"1","orderCharges":[{"amount":0}],"price":"92","payments":[{"type":"cash","amount":92,"card":{"number":"","expireMonth":1,"expireYear":1,"holderId":"","holderName":""}}]}"""
+def create_data_for_presto(data: str) -> Type[OrderPrestoModel]:
+    try:
+        order_from_wix = OrderWixModel.parse_raw(data)
+    except ValidationError as e:
+        print(e.json())
+    else:
+        order_to_presto = OrderPrestoModel
+
+        order_to_presto.id_ = order_from_wix.action_event.body_as_json.order.id_
+
+        order_to_presto.contact.first_name = (
+            order_from_wix.action_event.body_as_json.order.customer.first_name
+        )
+        order_to_presto.contact.last_name = (
+            order_from_wix.action_event.body_as_json.order.customer.last_name
+        )
+        order_to_presto.contact.phone = (
+            order_from_wix.action_event.body_as_json.order.customer.phone
+        )
+
+        order_to_presto.delivery.type_ = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.type_
+        )
+        order_to_presto.delivery.address.formatted = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.formatted
+        )
+        order_to_presto.delivery.address.city = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.city
+        )
+        order_to_presto.delivery.address.street = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.street
+        )
+        order_to_presto.delivery.address.number = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.street_number
+        )
+        order_to_presto.delivery.address.entrance = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.entrance
+        )
+        order_to_presto.delivery.address.floor = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.floor
+        )
+        order_to_presto.delivery.address.apt = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.apt
+        )
+        order_to_presto.delivery.address.comment = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.comment
+        )
+
+        order_to_presto.delivery.charge = (
+            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.charge
+        )
+
+        order_to_presto.delivery.number_of_people = (
+            "N/A"  # find data in wix or another source
+        )
+
+        order_to_presto.delivery.worker_code = (
+            "N/A"  # find data in wix or another source
+        )
+
+        order_to_presto.order_items = []
+        for order_item in order_from_wix.action_event.body_as_json.order.line_items:
+            item_in_order_for_presto = OrderItem
+            item_in_order_for_presto.type_ = "item"
+            item_in_order_for_presto.id_ = (
+                "N/A"  # wix have id for each item, but presto doesn't have
+            )
+            item_in_order_for_presto.price = ""
+            item_in_order_for_presto.comment = ""
+
+            item_in_order_for_presto.option = []
+            if len(order_item.dish_options) != 0:
+                for option_item in order_item.dish_options:
+                    option_item_in_order_for_presto = OrderItemOption
+                    option_item_in_order_for_presto.type_ = "option"
+                    option_item_in_order_for_presto.id_ = "N/A"
+                    option_item_in_order_for_presto.price = ""
+                    option_item_in_order_for_presto.comment = ""
+                    item_in_order_for_presto.option.append(option_item)
+
+            item_in_order_for_presto.count_of_items = len(
+                order_from_wix.action_event.body_as_json.order.line_items
+            )
+            item_in_order_for_presto.count_of_options = len(
+                item_in_order_for_presto.option
+            )
+            order_to_presto.order_items.append(item_in_order_for_presto)
+
+        order_to_presto.comment = order_from_wix.action_event.body_as_json.order.comment
+
+        order_to_presto.takeout_packs = "N/A"  # find data in wix or another source
+
+        order_to_presto.order_charges = []
+        """
+        Here need "for" statement, but not clear what is "amount" in presto exactly 
+        in wix order.
+        """
+
+        order_to_presto.price = (
+            order_from_wix.action_event.body_as_json.order.totals.total
+        )
+
+        order_to_presto.payments = []
+        for payment in order_from_wix.action_event.body_as_json.order.payments:
+            payment_in_order_for_presto = Payment
+            payment_in_order_for_presto.type_ = payment.type_
+            payment_in_order_for_presto.amount = payment.amount
+
+            payment_in_order_for_presto.card.number = (
+                "N/A"  # wix doesn't have card number
+            )
+            payment_in_order_for_presto.card.expiration_month = (
+                "N/A"  # wix doesn't have card expiration date
+            )
+            payment_in_order_for_presto.card.expiration_year = (
+                "N/A"  # wix doesn't have card expiration
+            )
+            payment_in_order_for_presto.card.holder_id = (
+                "N/A"  # wix doesn't have card holder id
+            )
+            payment_in_order_for_presto.card.holder_name = (
+                "N/A"  # wix doesn't have card holder name
+            )
+
+            order_to_presto.payments.append(payment_in_order_for_presto)
+        return order_to_presto
+
+
+if __name__ == "__main__":
+    OUTPUT_JSON = """
+    {
+        "id": 45984,
+        "contact": {
+            "firstName": "test",
+            "lastName": "test",
+            "phone": "0544520187"
+        },
+        "delivery": {
+            "type": "delivery",
+            "address": {
+                "formatted": "��� ����, test 1 \/ 1",
+                "city": "��� ����",
+                "street": "test",
+                "number": "1",
+                "entrance": "",
+                "floor": "",
+                "apt": "1",
+                "comment": ""
+            },
+            "charge": "8",
+            "numppl": "1",
+            "workercode": 1
+        },
+        "orderItems": [
+            {
+                "type": "item",
+                "id": 762,
+                "price": 0,
+                "comment": "0",
+                "children": [],
+                "itemcount": 1,
+                "childrencount": 0
+            },
+            {
+                "type": "item",
+                "id": 101,
+                "price": 0,
+                "comment": "0",
+                "children": [],
+                "itemcount": 1,
+                "childrencount": 0
+            },
+            {
+                "type": "item",
+                "id": 761,
+                "price": 0,
+                "comment": "",
+                "children": [],
+                "itemcount": 2,
+                "childrencount": 0
+            },
+            {
+                "type": "item",
+                "id": 765,
+                "price": 0,
+                "comment": "",
+                "children": [],
+                "itemcount": 2,
+                "childrencount": 0
+            },
+            {
+                "type": "item",
+                "id": 74,
+                "price": 42,
+                "comment": " \/\/ ��� ������",
+                "children": [
+                    {
+                        "type": "option",
+                        "id": 290,
+                        "price": 0,
+                        "comment": ""
+                    }
+                ],
+                "itemcount": 1,
+                "childrencount": 1
+            },
+            {
+                "type": "item",
+                "id": 74,
+                "price": 42,
+                "comment": " \/\/ ��� ������",
+                "children": [
+                    {
+                        "type": "option",
+                        "id": 290,
+                        "price": 0,
+                        "comment": ""
+                    }
+                ],
+                "itemcount": 1,
+                "childrencount": 1
+            }
+        ],
+        "comment": "",
+        "takeoutPacks": "1",
+        "orderCharges": [
+            {
+                "amount": 0
+            }
+        ],
+        "price": "92",
+        "payments": [
+            {
+                "type": "cash",
+                "amount": 92,
+                "card": {
+                    "number": "",
+                    "expireMonth": 1,
+                    "expireYear": 1,
+                    "holderId": "",
+                    "holderName": ""
+                }
+            }
+        ]
+    }
+"""
 
     create_file_for_presto(OUTPUT_JSON)
 
