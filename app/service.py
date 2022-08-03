@@ -1,14 +1,25 @@
-from typing import Type
+"""The module contains the general function for working with data from Wix webhook:
 
-from jose import jwt
-from cryptography.hazmat.primitives import serialization
+- `create_file_for_presto(data: str)` -- Creates a data file in the working directory.
+- `print_data_from_wix_order(data: str)` -- Prints data from Wix API order.
+- `create_data_for_presto(data_in: str, data_out: str)` -- Creates data for Presto.
+"""
+
 from pydantic import ValidationError
 
-from schemas.presto_output import OrderPrestoModel, OrderItem, OrderItemOption, Payment
-from schemas.wix_input import OrderWixModel
+from app.schemas.presto_output import OrderPrestoModel, OrderItem
+from app.schemas.wix_input import OrderWixModel
 
 
-def create_file_for_presto(data):
+def create_file_for_presto(data: str):
+    """Creates a data file in the working directory
+
+    Args:
+        data: Ready-made data from Wix API to be parsed for Presto
+
+    Returns:
+        None -- Creates a file in the working directory
+    """
     try:
         order = OrderPrestoModel.parse_raw(data)
     except ValidationError as e:
@@ -19,7 +30,15 @@ def create_file_for_presto(data):
             order_file.write(order.json(by_alias=True).replace(" ", ""))
 
 
-def print_data_from_wix_order(data):
+def print_data_from_wix_order(data: str):
+    """Prints data from Wix API order
+
+    Args:
+        data: Raw data from Wix API
+
+    Returns:
+        None -- Prints data from Wix API
+    """
     try:
         order = OrderWixModel.parse_raw(data)
     except ValidationError as e:
@@ -28,15 +47,28 @@ def print_data_from_wix_order(data):
         print(order.json(by_alias=True))
 
 
-def create_data_for_presto(data: str) -> Type[OrderPrestoModel]:
+def create_data_for_presto(data_in: str, data_out: str):
+    """Validates the received data and prepares the data for Presto
+
+    Args:
+        data_in: Data received from Wix
+        data_out: Data to be sent to Presto
+
+    Returns:
+        Data to be sent to Presto
+    """
     try:
-        order_from_wix = OrderWixModel.parse_raw(data)
+        order_from_wix = OrderWixModel.parse_raw(data_in)
+        order_to_presto = OrderPrestoModel.parse_raw(data_out)
     except ValidationError as e:
         print(e.json())
     else:
-        order_to_presto = OrderPrestoModel
+        print(order_from_wix.json(by_alias=True))
+        print(order_to_presto.json(by_alias=True))
 
         order_to_presto.id_ = order_from_wix.action_event.body_as_json.order.id_
+
+        # order_to_presto.contact = Contact
 
         order_to_presto.contact.first_name = (
             order_from_wix.action_event.body_as_json.order.customer.first_name
@@ -48,18 +80,23 @@ def create_data_for_presto(data: str) -> Type[OrderPrestoModel]:
             order_from_wix.action_event.body_as_json.order.customer.phone
         )
 
+        # order_to_presto.delivery = Delivery
+
         order_to_presto.delivery.type_ = (
             order_from_wix.action_event.body_as_json.order.fulfillment.type_
         )
+
+        # order_to_presto.delivery.address = Address
+
         order_to_presto.delivery.address.formatted = (
             order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.formatted
         )
         order_to_presto.delivery.address.city = (
             order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.city
         )
-        order_to_presto.delivery.address.street = (
-            order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.street
-        )
+        # order_to_presto.delivery.address.street = (
+        #     order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.street
+        # )
         order_to_presto.delivery.address.number = (
             order_from_wix.action_event.body_as_json.order.fulfillment.delivery_details.address_of_delivery.street_number
         )
@@ -88,33 +125,24 @@ def create_data_for_presto(data: str) -> Type[OrderPrestoModel]:
             "N/A"  # find data in wix or another source
         )
 
-        order_to_presto.order_items = []
+        # order_to_presto.order_items = []
+        presto_order_item = OrderItem(**order_to_presto.order_items[0].dict(by_alias=True))
+        # presto_order_option = OrderItemOption(**order_to_presto.order_items[0].options[0].dict(by_alias=True))
         for order_item in order_from_wix.action_event.body_as_json.order.line_items:
-            item_in_order_for_presto = OrderItem
-            item_in_order_for_presto.type_ = "item"
-            item_in_order_for_presto.id_ = (
-                "N/A"  # wix have id for each item, but presto doesn't have
-            )
-            item_in_order_for_presto.price = ""
-            item_in_order_for_presto.comment = ""
+            presto_order_item.type_ = "item"
+            presto_order_item.id_ = "N/A"
+            presto_order_item.price = order_item.price
+            presto_order_item.comment = order_item.comment
+            presto_order_item.options = []
+            # for option in order_item.dish_options:
+            #     presto_order_option.id_ = "N/A"
+            #     presto_order_option.price = option.price
+            #     presto_order_option.comment = option.comment
+            #     presto_order_item.options.append(presto_order_option)
+            presto_order_item.count_of_items = order_item.quantity
+            presto_order_item.count_of_options = len(presto_order_item.options)
 
-            item_in_order_for_presto.option = []
-            if len(order_item.dish_options) != 0:
-                for option_item in order_item.dish_options:
-                    option_item_in_order_for_presto = OrderItemOption
-                    option_item_in_order_for_presto.type_ = "option"
-                    option_item_in_order_for_presto.id_ = "N/A"
-                    option_item_in_order_for_presto.price = ""
-                    option_item_in_order_for_presto.comment = ""
-                    item_in_order_for_presto.option.append(option_item)
-
-            item_in_order_for_presto.count_of_items = len(
-                order_from_wix.action_event.body_as_json.order.line_items
-            )
-            item_in_order_for_presto.count_of_options = len(
-                item_in_order_for_presto.option
-            )
-            order_to_presto.order_items.append(item_in_order_for_presto)
+            order_to_presto.order_items.append(presto_order_item)
 
         order_to_presto.comment = order_from_wix.action_event.body_as_json.order.comment
 
@@ -122,7 +150,7 @@ def create_data_for_presto(data: str) -> Type[OrderPrestoModel]:
 
         order_to_presto.order_charges = []
         """
-        Here need "for" statement, but not clear what is "amount" in presto exactly 
+        Here need "for" statement, but not clear what is "amount" in presto exactly
         in wix order.
         """
 
@@ -130,30 +158,33 @@ def create_data_for_presto(data: str) -> Type[OrderPrestoModel]:
             order_from_wix.action_event.body_as_json.order.totals.total
         )
 
-        order_to_presto.payments = []
-        for payment in order_from_wix.action_event.body_as_json.order.payments:
-            payment_in_order_for_presto = Payment
-            payment_in_order_for_presto.type_ = payment.type_
-            payment_in_order_for_presto.amount = payment.amount
+        # order_to_presto.payments = Payment
+        # order_to_presto.payments.card = PaymentCard
 
-            payment_in_order_for_presto.card.number = (
-                "N/A"  # wix doesn't have card number
-            )
-            payment_in_order_for_presto.card.expiration_month = (
-                "N/A"  # wix doesn't have card expiration date
-            )
-            payment_in_order_for_presto.card.expiration_year = (
-                "N/A"  # wix doesn't have card expiration
-            )
-            payment_in_order_for_presto.card.holder_id = (
-                "N/A"  # wix doesn't have card holder id
-            )
-            payment_in_order_for_presto.card.holder_name = (
-                "N/A"  # wix doesn't have card holder name
-            )
-
-            order_to_presto.payments.append(payment_in_order_for_presto)
-        return order_to_presto
+        # order_to_presto.payments = []
+        # for payment in order_from_wix.action_event.body_as_json.order.payments:
+        #     payment_in_order_for_presto = Payment
+        #     payment_in_order_for_presto.type_ = payment.type_
+        #     payment_in_order_for_presto.amount = payment.amount
+        #
+        #     payment_in_order_for_presto.card.number = (
+        #         "N/A"  # wix doesn't have card number
+        #     )
+        #     payment_in_order_for_presto.card.expiration_month = (
+        #         "N/A"  # wix doesn't have card expiration date
+        #     )
+        #     payment_in_order_for_presto.card.expiration_year = (
+        #         "N/A"  # wix doesn't have card expiration
+        #     )
+        #     payment_in_order_for_presto.card.holder_id = (
+        #         "N/A"  # wix doesn't have card holder id
+        #     )
+        #     payment_in_order_for_presto.card.holder_name = (
+        #         "N/A"  # wix doesn't have card holder name
+        #     )
+        #
+        #     order_to_presto.payments.append(payment_in_order_for_presto)
+        print(order_to_presto.json(by_alias=True))
 
 
 if __name__ == "__main__":
@@ -275,7 +306,7 @@ if __name__ == "__main__":
     }
 """
 
-    create_file_for_presto(OUTPUT_JSON)
+    # create_file_for_presto(OUTPUT_JSON)
 
     INPUT_JSON = """
     {
@@ -409,7 +440,10 @@ if __name__ == "__main__":
       } 
     """
 
-    print_data_from_wix_order(INPUT_JSON)
+    # print_data_from_wix_order(INPUT_JSON)
+
+
+
     # order_test = OrderWixModel.parse_raw(INPUT_JSON)
     # print(order_test)
     # with open("cert/pubic_key.txt", "r") as f:
@@ -417,3 +451,7 @@ if __name__ == "__main__":
     #
     # gfj = jwt.decode("jhgkjgkjhlkhlljklnjuiolnkl.jbiougooyoigbiuoy.iuhouiguigugo", public_key, algorithms=["RS256"])
     # print(gfj)
+
+    # data = create_data_for_presto(INPUT_JSON)
+    # print(json.dumps(data, indent=4))
+    create_data_for_presto(INPUT_JSON, OUTPUT_JSON)

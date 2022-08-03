@@ -1,7 +1,16 @@
+"""Endpoints for the API
+
+    This file contains the endpoints for the API.
+
+    The endpoints are:
+    - `/api/hook` -- the endpoint for the receiving data from the Wix webhook.
+
+"""
+
 from fastapi import FastAPI, status
 import uvicorn
 
-from schemas.wix_input import WebhookResponse, WebhookData
+from app.schemas.wix_input import WebhookResponse, WebhookData
 
 app = FastAPI()
 
@@ -10,8 +19,11 @@ app = FastAPI()
 def hook(data: WebhookData):
     """
     This is endpoint for receiving webhook requests from the Wix API.
+
+    Params:
+        data: Webhook data.
     """
-    with open("hook.json", "w") as f:
+    with open("../hook.json", "w") as f:
         f.write(str(data))
     return {"status": "ok"}
 

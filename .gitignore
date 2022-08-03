@@ -160,8 +160,8 @@ cython_debug/
 .idea/
 
 .DS_Store
-cert/prestowixlocaldev.crt
-cert/prestowixlocaldev.key
+app/cert/prestowixlocaldev.crt
+app/cert/prestowixlocaldev.key
 test_main.http
 /hook.json
 /drafts/
